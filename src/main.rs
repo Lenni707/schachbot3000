@@ -1,7 +1,19 @@
-use shakmaty::{Move, Position, Chess};
+use shakmaty::{Chess};
+
+mod eval;
+mod psqt;
+mod search;
+
+// TODO FOR EVAL:
+// ALREAFY COMPLETED (SORT OF)
+//      - PST TABLE
+//      - INDIVDUAL VALUE OF PIECES
+// TODO
+//      - ATTACKER/DEFENDER
+//      - PIECE SPECIFICS (DOUBLE ROCKS, DOUBLE PAWNS PUNISHED, ETC...)
+//
+// TODO FOR LOOP
 
 fn main() {
-    let pos = Chess::default();
-    let legals = pos.legal_moves();
-    println!("{:?}", legals)
+    let _pos = Chess::default();
 }

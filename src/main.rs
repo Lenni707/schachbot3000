@@ -83,3 +83,4 @@ fn main() -> io::Result<()> {
 //      - PIECE SPECIFICS (DOUBLE ROCKS, DOUBLE PAWNS PUNISHED, ETC...)
 //
 // TODO FOR LOOP
+// TIME MANAHEDMENT

@@ -50,6 +50,11 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32) -> i32 {
         }
     }
 
+    if board.is_game_over() { // hopefully check for 3 point rpetition
+        return 0;
+    }
+
+
     for m in possible_moves {
         let mut cloned_pos = board.clone();
         cloned_pos.play_unchecked(m);

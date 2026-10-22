@@ -1,5 +1,3 @@
-use std::ffi::c_char;
-
 use shakmaty::{Chess, Move, Position};
 
 use crate::eval::{evaluate};
@@ -18,7 +16,7 @@ pub fn get_best_move(board: &Chess, depth: u32) -> Option<Move> {
         let mut cloned_pos = board.clone();
         cloned_pos.play_unchecked(m); // now opponents turn
 
-        let score = -alpha_beta(&cloned_pos, -i32::MAX, -best_score, depth); // score is returned from opponents perspective (positive for them = negative for me)
+        let score = -alpha_beta(&cloned_pos, -i32::MAX, i32::MAX, depth - 1); // score is returned from opponents perspective (positive for them = negative for me)
 
         if score > best_score {
             best_score = score;
@@ -35,25 +33,18 @@ pub fn get_best_move(board: &Chess, depth: u32) -> Option<Move> {
 // nur hälfte gecheckt aber egal
 
 pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32) -> i32 {
-    if depth == 0 {
-        return evaluate(board, board.turn()) // eval current player
-    }
-
     let possible_moves = board.legal_moves();
 
     if possible_moves.is_empty() {
         if board.is_checkmate() { // is the current player getting checkmated
             return -200000 - depth as i32 // apply huge debuff
         }
-        if board.is_stalemate() || board.has_insufficient_material(board.turn()) {
-            return 0
-        }
-    }
-
-    if board.is_game_over() { // hopefully check for 3 point rpetition
         return 0;
     }
 
+    if depth == 0 {
+        return evaluate(board, board.turn()) // eval current player
+    }
 
     for m in possible_moves {
         let mut cloned_pos = board.clone();

@@ -1,4 +1,5 @@
 use std::io::{self, BufRead, Write};
+use std::time::Duration;
 use std::{thread, time};
 use std::sync::mpsc;
 use shakmaty::{CastlingMode, Chess, Move, Position};
@@ -32,6 +33,7 @@ fn main() -> io::Result<()> {
     let mut current_pos = Chess::default();
 
     let mut ponder_move: (Option<Move>, Option<Move>) = (None, None);
+    let mut prev_time_control: Option<UciTimeControl> = None;
 
     for received_msg in &rx {
         match received_msg {
@@ -62,18 +64,16 @@ fn main() -> io::Result<()> {
                 }
             }
             UciMessage::Go { time_control, .. } => { // TODO ADD TIME BASED DECISSIONS
-                if let Some(time_control_existing) = time_control {
-                    if time_control_existing == UciTimeControl::Ponder {
-                        ponder_move = get_best_move(&current_pos, DEPTH, Some(time_control_existing), &current_pos.turn(), &rx);
-                    }
-                } else {
-                    let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn(), &rx);
+                let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
+                let tc = if !pondering { time_control } else { prev_time_control };
+                prev_time_control = tc.clone();
+                
+                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, tc, &current_pos.turn(), &rx);
 
-                    let response = convert_move(best_shakmaty_move);
+                let response = convert_move(best_shakmaty_move);
 
-                    writeln!(stdout, "{}", response)?;
-                    stdout.flush()?;
-                }
+                writeln!(stdout, "{}", response)?;
+                stdout.flush()?;
 
             }
             UciMessage::PonderHit => {

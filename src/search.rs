@@ -1,7 +1,7 @@
 use std::{sync::mpsc::Receiver, time::{Duration, Instant}};
 
 use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
-use shakmaty_uci::{UciMessage, UciTimeControl};
+use shakmaty_uci::{UciMessage::{self, PonderHit}, UciTimeControl};
 
 use crate::{eval::evaluate, psqt::piece_value};
 
@@ -18,29 +18,35 @@ impl ChessMove{
 
 pub struct SearchManager<'a> {
     deadline: Option<Instant>,
+    time_budget: Option<Duration>,
     nodes_searched: u32,
     rx: &'a Receiver<UciMessage>,
+    pondering: bool,
     stopped: bool,
 }
 
 impl<'a> SearchManager<'a> {
-    fn new(deadline: Option<Instant>, rx: &'a Receiver<UciMessage>) -> Self {
-        SearchManager{deadline, nodes_searched: 0, rx, stopped: false}
+    fn new(rx: &'a Receiver<UciMessage>, pondering: bool, time_budget: Option<Duration>) -> Self {
+        let deadline = if pondering { None } else { time_budget.map(|b| Instant::now() + b) };
+        SearchManager{deadline, time_budget, nodes_searched: 0, rx, pondering, stopped: false}
     }
     fn should_stop(&mut self) -> bool {
         self.nodes_searched += 1;
         if let Some(deadline) = self.deadline {
             // evers 2048 it gets checked if the move time is over
             if self.nodes_searched % 2048 == 0 {
-                if Instant::now() >= deadline {
-                    self.stopped = true
+                for received_msg in self.rx.try_iter() {
+                    match received_msg {
+                        UciMessage::Stop => { self.stopped = true; }
+                        UciMessage::PonderHit => { self.pondering = false; self.deadline = self.time_budget.map(|b| Instant::now + b);}
+                        _ => {}
+                    }
                 }
-            }
-        }
-        for received_msg in self.rx {
-            match received_msg {
-                UciMessage::Stop => { self.stopped = true }
-                _ => {}
+                if !self.pondering {
+                    if Instant::now() >= deadline {
+                        self.stopped = true
+                    }
+                }
             }
         }
         self.stopped
@@ -82,27 +88,26 @@ pub fn get_best_move(
     depth: u32,
     time_control: Option<UciTimeControl>,
     playing_color: &Color,
-    rx: &Receiver<UciMessage>
+    rx: &Receiver<UciMessage>,
 ) -> (Option<Move>, Option<Move>) {
     let possible_moves = board.legal_moves();
         if possible_moves.is_empty() {
             return (None, None);
         }
 
-    let mut move_time: Option<Duration> = None;
-
-    if let Some(time_control) = time_control {
-        match time_control {
-            UciTimeControl::MoveTime(duration) => { move_time = Some(duration.saturating_sub(Duration::from_millis(25))) }
-            UciTimeControl::TimeLeft { white_time, black_time, white_increment, black_increment, moves_to_go } => {
-                move_time = Some(calc_time_budget(white_time, black_time, white_increment, black_increment, moves_to_go, playing_color));
-            }
-            _ => {} // ponder or infinite time => no time limits apply
+    let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
+    
+    let budget = match time_control {
+        Some(UciTimeControl::MoveTime(duration)) => {
+            Some(duration.saturating_sub(Duration::from_millis(25)))
         }
-    }
+        Some(UciTimeControl::TimeLeft { white_time, black_time, white_increment, black_increment, moves_to_go }) => {
+            Some(calc_time_budget(white_time, black_time, white_increment, black_increment, moves_to_go, playing_color))
+        }
+        _ => None, // ponder / infinite
+    };
 
-    let time_deadline = move_time.map(|t| Instant::now() + t); // map ist hella aura: macht hier sogar sinn weil das ja beides options sind und ich sozusagen einfach hinmappe halt idk wie ich es erklären soll
-    let mut search_manager = SearchManager::new(time_deadline, rx);
+    let mut search_manager = SearchManager::new(rx, pondering, budget);
 
     let mut result = (Some(possible_moves[0]), None); // fallback if smt doesnt just pick erstbester (was ist das englische wort) move
 

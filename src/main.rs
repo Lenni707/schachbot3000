@@ -31,6 +31,8 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     let mut current_pos = Chess::default();
 
+    let mut ponder_move: (Option<Move>, Option<Move>) = (None, None);
+
     for received_msg in &rx {
         match received_msg {
             UciMessage::Uci => {
@@ -60,26 +62,41 @@ fn main() -> io::Result<()> {
                 }
             }
             UciMessage::Go { time_control, .. } => { // TODO ADD TIME BASED DECISSIONS
-                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn(), &rx);
+                if let Some(time_control_existing) = time_control {
+                    if time_control_existing == UciTimeControl::Ponder {
+                        ponder_move = get_best_move(&current_pos, DEPTH, Some(time_control_existing), &current_pos.turn(), &rx);
+                    }
+                } else {
+                    let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn(), &rx);
 
-                let uci_move = UciMove::from_move(best_shakmaty_move.0.expect("no valid moves left, idk why game didnt end earlier"), CastlingMode::Standard); // .unwrap fuckt todes ab aber ka wie ich es mach soll
-                let ponder = best_shakmaty_move.1.map(|m| UciMove::from_move(m, CastlingMode::Standard));
-                let response = UciMessage::BestMove {
-                    best_move: uci_move,
-                    ponder
-                };
+                    let response = convert_move(best_shakmaty_move);
+
+                    writeln!(stdout, "{}", response)?;
+                    stdout.flush()?;
+                }
+
+            }
+            UciMessage::PonderHit => {
+                let response = convert_move(ponder_move);
 
                 writeln!(stdout, "{}", response)?;
                 stdout.flush()?;
-            }
-            UciMessage::PonderHit => {
-                // TODO have to think of a better strategy after ponder hit
             }
             UciMessage::Quit => break,
             _ => {}
         }
     }
     Ok(())
+}
+
+fn convert_move(m: (Option<Move>, Option<Move>)) -> UciMessage {
+    let uci_move = UciMove::from_move(m.0.expect("no valid moves left, idk why game didnt end earlier"), CastlingMode::Standard); // .unwrap fuckt todes ab aber ka wie ich es mach soll
+    let ponder = m.1.map(|m| UciMove::from_move(m, CastlingMode::Standard));
+    let response = UciMessage::BestMove {
+        best_move: uci_move,
+        ponder
+    };
+    response
 }
 // TODO FOR EVAL:
 // ALREAFY COMPLETED (SORT OF)

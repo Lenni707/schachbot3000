@@ -38,7 +38,7 @@ impl<'a> SearchManager<'a> {
                 for received_msg in self.rx.try_iter() {
                     match received_msg {
                         UciMessage::Stop => { self.stopped = true; }
-                        UciMessage::PonderHit => { self.pondering = false; self.deadline = self.time_budget.map(|b| Instant::now + b);}
+                        UciMessage::PonderHit => { self.pondering = false; self.deadline = self.time_budget.map(|b| Instant::now() + b);}
                         _ => {}
                     }
                 }

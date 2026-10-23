@@ -1,5 +1,5 @@
 use std::io::{self, BufRead, Write};
-use std::thread;
+use std::{thread, time};
 use std::sync::mpsc;
 use shakmaty::{CastlingMode, Chess, Move, Position};
 use shakmaty_uci::{UciMessage, UciMove, UciTimeControl};
@@ -31,8 +31,6 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     let mut current_pos = Chess::default();
 
-    let mut ponder_move_and_response: (Option<Move>, Option<Move>) = (None, None);
-
     for received_msg in &rx {
         match received_msg {
             UciMessage::Uci => {
@@ -62,12 +60,7 @@ fn main() -> io::Result<()> {
                 }
             }
             UciMessage::Go { time_control, .. } => { // TODO ADD TIME BASED DECISSIONS
-                let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
-
-                if pondering {
-                    ponder_move_and_response = get_best_move(&current_pos, DEPTH);
-                }
-                let best_shakmaty_move = get_best_move(&current_pos, DEPTH);
+                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control);
 
                 let uci_move = UciMove::from_move(best_shakmaty_move.0.expect("no valid moves left, idk why game didnt end earlier"), CastlingMode::Standard); // .unwrap fuckt todes ab aber ka wie ich es mach soll
                 let uci_opponent_anwer_move = Some(UciMove::from_move(best_shakmaty_move.1.expect("no valid opponent moves left idk why game didnt end earlier"), CastlingMode::Standard));
@@ -82,18 +75,6 @@ fn main() -> io::Result<()> {
             }
             UciMessage::PonderHit => {
                 // TODO have to think of a better strategy after ponder hit
-                if let (Some(best), Some(reply)) = ponder_move_and_response {
-                    let uci_move = UciMove::from_move(best, CastlingMode::Standard);
-                    let uci_opponent_answer_move = Some(UciMove::from_move(reply, CastlingMode::Standard));
-
-                    let response = UciMessage::BestMove {
-                        best_move: uci_move,
-                        ponder: uci_opponent_answer_move,
-                    };
-
-                    writeln!(stdout, "{}", response)?;
-                    stdout.flush()?;
-                }
             }
             UciMessage::Quit => break,
             _ => {}

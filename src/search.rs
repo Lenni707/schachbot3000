@@ -1,4 +1,5 @@
 use shakmaty::{Chess, Move, Position};
+use shakmaty_uci::{UciMessage, UciTimeControl};
 
 use crate::eval::{evaluate};
 
@@ -13,7 +14,7 @@ impl ChessMove{
     }
 }
 
-pub fn get_best_move(board: &Chess, depth: u32) -> (Option<Move>, Option<Move>) {
+pub fn get_best_move(board: &Chess, depth: u32, time_control: Option<UciTimeControl>) -> (Option<Move>, Option<Move>) {
     let mut best_move: Option<Move> = None;
     let mut opponent_best_answer: Option<Move> = None;
     let mut best_score: i32 = -i32::MAX;

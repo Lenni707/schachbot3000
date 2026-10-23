@@ -1,4 +1,6 @@
-use shakmaty::{Chess, Move, Position};
+use std::time::Duration;
+
+use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
 use shakmaty_uci::{UciMessage, UciTimeControl};
 
 use crate::eval::{evaluate};
@@ -14,7 +16,46 @@ impl ChessMove{
     }
 }
 
-pub fn get_best_move(board: &Chess, depth: u32, time_control: Option<UciTimeControl>) -> (Option<Move>, Option<Move>) {
+pub fn calc_time_budget(
+    white_time: Option<Duration>,
+    black_time: Option<Duration>,
+    white_increment: Option<Duration>,
+    black_increment: Option<Duration>,
+    moves_to_go: Option<u8>,
+    playing_color: &Color
+) -> Duration {
+    let (time, increment) = match playing_color {
+        White => {(white_time, white_increment)}
+        Black => {(black_time, black_increment)}
+    };
+    let time = time.unwrap_or_default();
+    let increment = increment.unwrap_or_default(); // default increment is 0 (hopefully)
+    let moves_to_go = moves_to_go.unwrap_or(30);
+
+    let time_budget = time / moves_to_go as u32 + increment / 2;
+
+    time_budget
+}
+
+pub fn get_best_move(
+    board: &Chess,
+    depth: u32,
+    time_control: Option<UciTimeControl>,
+
+    playing_color: &Color
+) -> (Option<Move>, Option<Move>) {
+    let mut move_time: Option<Duration> = None;
+
+    if let Some(time_control) = time_control {
+        match time_control {
+            UciTimeControl::MoveTime(duration) => { move_time = Some(duration.saturating_sub(Duration::from_millis(25))) }
+            UciTimeControl::TimeLeft { white_time, black_time, white_increment, black_increment, moves_to_go } => {
+                move_time = Some(calc_time_budget(white_time, black_time, white_increment, black_increment, moves_to_go, playing_color));
+            }
+            _ => {} // ponder or infinite time => no time limits apply
+        }
+    }
+
     let mut best_move: Option<Move> = None;
     let mut opponent_best_answer: Option<Move> = None;
     let mut best_score: i32 = -i32::MAX;
@@ -29,7 +70,7 @@ pub fn get_best_move(board: &Chess, depth: u32, time_control: Option<UciTimeCont
         let mut cloned_pos = board.clone();
         cloned_pos.play_unchecked(m); // now opponents turn
 
-        let alpha_beta_result = alpha_beta(&cloned_pos, -i32::MAX, i32::MAX, depth - 1);
+        let alpha_beta_result = alpha_beta(&cloned_pos, -i32::MAX, -best_score, depth - 1);
         let score = -alpha_beta_result.score; // score is returned from opponents perspective (positive for them = negative for me)
 
         if score > best_score {
@@ -71,7 +112,7 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32) -> Chess
         let score = -alpha_beta(&cloned_pos, -beta, -alpha, depth - 1).score; // opponents turn =>
         if score >= beta {
             return ChessMove::new(beta, Some(m));
-            
+
         }
         if score > alpha {
             alpha = score;

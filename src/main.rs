@@ -60,7 +60,7 @@ fn main() -> io::Result<()> {
                 }
             }
             UciMessage::Go { time_control, .. } => { // TODO ADD TIME BASED DECISSIONS
-                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn());
+                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn(), &rx);
 
                 let uci_move = UciMove::from_move(best_shakmaty_move.0.expect("no valid moves left, idk why game didnt end earlier"), CastlingMode::Standard); // .unwrap fuckt todes ab aber ka wie ich es mach soll
                 let ponder = best_shakmaty_move.1.map(|m| UciMove::from_move(m, CastlingMode::Standard));

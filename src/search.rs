@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::{sync::mpsc::Receiver, time::{Duration, Instant}};
 
 use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
 use shakmaty_uci::{UciMessage, UciTimeControl};
@@ -16,15 +16,16 @@ impl ChessMove{
     }
 }
 
-pub struct SearchManager {
+pub struct SearchManager<'a> {
     deadline: Option<Instant>,
     nodes_searched: u32,
-    stopped: bool
+    rx: &'a Receiver<UciMessage>,
+    stopped: bool,
 }
 
-impl SearchManager {
-    fn new(deadline: Option<Instant>) -> Self {
-        SearchManager{deadline, nodes_searched: 0, stopped: false}
+impl<'a> SearchManager<'a> {
+    fn new(deadline: Option<Instant>, rx: &'a Receiver<UciMessage>) -> Self {
+        SearchManager{deadline, nodes_searched: 0, rx, stopped: false}
     }
     fn should_stop(&mut self) -> bool {
         self.nodes_searched += 1;
@@ -34,6 +35,12 @@ impl SearchManager {
                 if Instant::now() >= deadline {
                     self.stopped = true
                 }
+            }
+        }
+        for received_msg in self.rx {
+            match received_msg {
+                UciMessage::Stop => { self.stopped = true }
+                _ => {}
             }
         }
         self.stopped
@@ -74,7 +81,8 @@ pub fn get_best_move(
     board: &Chess,
     depth: u32,
     time_control: Option<UciTimeControl>,
-    playing_color: &Color
+    playing_color: &Color,
+    rx: &Receiver<UciMessage>
 ) -> (Option<Move>, Option<Move>) {
     let possible_moves = board.legal_moves();
         if possible_moves.is_empty() {
@@ -94,7 +102,7 @@ pub fn get_best_move(
     }
 
     let time_deadline = move_time.map(|t| Instant::now() + t); // map ist hella aura: macht hier sogar sinn weil das ja beides options sind und ich sozusagen einfach hinmappe halt idk wie ich es erklären soll
-    let mut search_manager = SearchManager::new(time_deadline);
+    let mut search_manager = SearchManager::new(time_deadline, rx);
 
     let mut result = (Some(possible_moves[0]), None); // fallback if smt doesnt just pick erstbester (was ist das englische wort) move
 

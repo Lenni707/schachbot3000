@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
 use shakmaty_uci::{UciMessage, UciTimeControl};
 
-use crate::eval::{evaluate};
+use crate::{eval::evaluate, psqt::piece_value};
 
 pub struct ChessMove {
     score: i32,
@@ -61,6 +61,15 @@ pub fn calc_time_budget(
     time_budget
 }
 
+pub fn get_move_value(m: &Move) -> i32 {
+    let mut score = 0;
+    if let Some(victim) = m.capture() {
+        score = 10 * piece_value(victim) - piece_value(m.role());
+    }
+    if m.promotion().is_some() { score += 9000; }
+    score
+}
+
 pub fn get_best_move(
     board: &Chess,
     depth: u32,
@@ -71,7 +80,7 @@ pub fn get_best_move(
         if possible_moves.is_empty() {
             return (None, None);
         }
-    
+
     let mut move_time: Option<Duration> = None;
 
     if let Some(time_control) = time_control {
@@ -86,7 +95,7 @@ pub fn get_best_move(
 
     let time_deadline = move_time.map(|t| Instant::now() + t); // map ist hella aura: macht hier sogar sinn weil das ja beides options sind und ich sozusagen einfach hinmappe halt idk wie ich es erklären soll
     let mut search_manager = SearchManager::new(time_deadline);
-    
+
     let mut result = (Some(possible_moves[0]), None); // fallback if smt doesnt just pick erstbester (was ist das englische wort) move
 
     for d in 1..=depth { // iterative deepening
@@ -94,7 +103,7 @@ pub fn get_best_move(
         if search_manager.stopped { break; }
         result = this_iteration;
     }
-    
+
     result
 }
 
@@ -134,8 +143,8 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
     if search_manager.should_stop() {
         return ChessMove::new(0, None);   // value is garbage bc it stopped midway. caller thros it away
     }
-    
-    let possible_moves = board.legal_moves();
+
+    let mut possible_moves = board.legal_moves();
 
     if possible_moves.is_empty() {
         if board.is_checkmate() { // is the current player getting checkmated
@@ -144,11 +153,34 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
         return ChessMove::new(0, None);
     }
 
-    if depth == 0 {
-        return ChessMove::new(evaluate(board, board.turn()), None) // eval current player
+    if board.halfmoves() >= 100 { // 50 move rule
+        return ChessMove::new(0, None);
+    }
+
+
+    if depth == 0 && !board.is_check() {
+        // trigger quienscne when doing "nothing"
+        let stand_pat = evaluate(board, board.turn());
+        // if doing nothing is atleast beta the opponent wouldnt have allowed it. dont pursue the move further
+        if stand_pat >= beta {
+            return ChessMove::new(stand_pat, None)
+        }
+        // if dooing nothing improves current best guarante for us make it new baseline => new captures have to beat that baseline
+        if stand_pat >= alpha {
+            alpha = stand_pat
+        }
+        // remove every move thats a quietet position so only captures and promotions get evaluated (without depth)
+        for i in 0..possible_moves.len() {
+            if !possible_moves[i].is_capture() || !possible_moves[i].is_conversion() {
+                possible_moves.remove(i);
+            }
+        }
     }
 
     let mut best_opponent_move_at_node: Option<Move> = None;
+
+    // sort move by highest capture first
+    possible_moves.sort_unstable_by_key(|m| -get_move_value(m));
 
     for m in possible_moves {
         let mut cloned_pos = board.clone();

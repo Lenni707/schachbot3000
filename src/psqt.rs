@@ -1,4 +1,4 @@
-use shakmaty::{Color, Square};
+use shakmaty::{Role};
 
 pub const PAWN_VAL: i32 = 100;
 pub const KNIGHT_VAL: i32 = 320;
@@ -7,20 +7,23 @@ pub const ROOK_VAL: i32 = 500;
 pub const QUEEN_VAL: i32 = 900;
 pub const KING_VAL: i32 = 20000;
 
-#[inline(always)] // erster vibe code irgendwie für compiler optimize
-pub fn psqt_value(table: &[i32; 64], color: Color, square: Square) -> i32 {
-    let index = match color {
-        Color::White => square as usize, // square tuff, weil direkt in schachnotation umwandelbar
-        Color::Black => square.flip_vertical() as usize, // get halt mit square als wird aus a1 z.b a8
+pub fn piece_value(r: Role) -> i32 {
+    let value = match r {
+        Role::Pawn => PAWN_VAL,
+        Role::Knight => KNIGHT_VAL,
+        Role::Bishop => BISHOP_VAL,
+        Role::Rook => ROOK_VAL,
+        Role::Queen => QUEEN_VAL,
+        Role::King => KING_VAL,
     };
-    table[index]
+    value
 }
 
 pub const PAWNS_PST: [i32; 64] = [
     0,  0,  0,  0,  0,  0,  0,  0,
    50, 50, 50, 50, 50, 50, 50, 50,
-   10, 10, 20, 30, 30, 20, 10, 10,
-    5,  5, 10, 25, 25, 10,  5,  5,
+   10, 10, 20, 40, 40, 20, 10, 10,
+    5,  5, 10, 35, 35, 10,  5,  5,
     0,  0,  0, 20, 20,  0,  0,  0,
     5, -5,-10,  0,  0,-10, -5,  5,
     5, 10, 10,-20,-20, 10, 10,  5,
@@ -35,7 +38,7 @@ pub const KNIGHT_PST: [i32; 64] = [
     -30,  0, 15, 20, 20, 15,  0,-30,
     -30,  5, 10, 15, 15, 10,  5,-30,
     -40,-20,  0,  5,  5,  0,-20,-40,
-    -50,-40,-30,-30,-30,-30,-40,-50,
+    -50,-45,-30,-30,-30,-30,-35,-50,
 ];
 
 pub const BISHOP_PST: [i32; 64] = [

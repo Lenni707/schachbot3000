@@ -10,7 +10,7 @@ mod search;
 
 use crate::search::get_best_move;
 
-const DEPTH: u32 = 5;
+const DEPTH: u32 = 64;
 
 fn main() -> io::Result<()> {
     let (tx, rx) = mpsc::channel::<UciMessage>(); // one sender and one receiver channel
@@ -63,11 +63,10 @@ fn main() -> io::Result<()> {
                 let best_shakmaty_move = get_best_move(&current_pos, DEPTH, time_control, &current_pos.turn());
 
                 let uci_move = UciMove::from_move(best_shakmaty_move.0.expect("no valid moves left, idk why game didnt end earlier"), CastlingMode::Standard); // .unwrap fuckt todes ab aber ka wie ich es mach soll
-                let uci_opponent_anwer_move = Some(UciMove::from_move(best_shakmaty_move.1.expect("no valid opponent moves left idk why game didnt end earlier"), CastlingMode::Standard));
-
+                let ponder = best_shakmaty_move.1.map(|m| UciMove::from_move(m, CastlingMode::Standard));
                 let response = UciMessage::BestMove {
                     best_move: uci_move,
-                    ponder: uci_opponent_anwer_move,
+                    ponder
                 };
 
                 writeln!(stdout, "{}", response)?;

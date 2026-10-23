@@ -170,11 +170,7 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
             alpha = stand_pat
         }
         // remove every move thats a quietet position so only captures and promotions get evaluated (without depth)
-        for i in 0..possible_moves.len() {
-            if !possible_moves[i].is_capture() || !possible_moves[i].is_conversion() {
-                possible_moves.remove(i);
-            }
-        }
+        possible_moves.retain(|m| m.is_capture() || m.is_promotion()); // retain highkey goated
     }
 
     let mut best_opponent_move_at_node: Option<Move> = None;
@@ -187,7 +183,7 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
         cloned_pos.play_unchecked(m);
         // aplha = the lower bound the maximizing player is guaranteed to get
         // beta = the upper bound on the score the minimizing player is to allow
-        let score = -alpha_beta(&cloned_pos, -beta, -alpha, depth - 1, search_manager).score; // opponents turn =>
+        let score = -alpha_beta(&cloned_pos, -beta, -alpha, depth.saturating_sub(1), search_manager).score; // opponents turn =>
         if score >= beta {
             return ChessMove::new(beta, Some(m));
 

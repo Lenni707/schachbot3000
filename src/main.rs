@@ -1,6 +1,5 @@
-use std::io::{self, BufRead, Write};
-use std::time::Duration;
-use std::{thread, time};
+use std::io::{self, Write};
+use std::{thread};
 use std::sync::mpsc;
 use shakmaty::{CastlingMode, Chess, Move, Position};
 use shakmaty_uci::{UciMessage, UciMove, UciTimeControl};
@@ -32,7 +31,6 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     let mut current_pos = Chess::default();
 
-    let mut ponder_move: (Option<Move>, Option<Move>) = (None, None);
     let mut prev_time_control: Option<UciTimeControl> = None;
 
     for received_msg in &rx {
@@ -67,7 +65,7 @@ fn main() -> io::Result<()> {
                 let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
                 let tc = if !pondering { time_control } else { prev_time_control };
                 prev_time_control = tc.clone();
-                
+
                 let best_shakmaty_move = get_best_move(&current_pos, DEPTH, tc, &current_pos.turn(), &rx);
 
                 let response = convert_move(best_shakmaty_move);
@@ -75,12 +73,6 @@ fn main() -> io::Result<()> {
                 writeln!(stdout, "{}", response)?;
                 stdout.flush()?;
 
-            }
-            UciMessage::PonderHit => {
-                let response = convert_move(ponder_move);
-
-                writeln!(stdout, "{}", response)?;
-                stdout.flush()?;
             }
             UciMessage::Quit => break,
             _ => {}
@@ -103,8 +95,7 @@ fn convert_move(m: (Option<Move>, Option<Move>)) -> UciMessage {
 //      - PST TABLE
 //      - INDIVDUAL VALUE OF PIECES
 // TODO
-//      - ATTACKER/DEFENDER
 //      - PIECE SPECIFICS (DOUBLE ROCKS, DOUBLE PAWNS PUNISHED, ETC...)
 //
 // TODO FOR LOOP
-// TIME MANAHEDMENT
+// TRANSPOSITION TABLES

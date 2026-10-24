@@ -1,7 +1,7 @@
 use std::{sync::mpsc::Receiver, time::{Duration, Instant}};
 
 use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
-use shakmaty_uci::{UciMessage::{self, PonderHit}, UciTimeControl};
+use shakmaty_uci::{UciMessage, UciTimeControl};
 
 use crate::{eval::evaluate, psqt::piece_value};
 
@@ -96,7 +96,6 @@ pub fn get_best_move(
         }
 
     let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
-    
     let budget = match time_control {
         Some(UciTimeControl::MoveTime(duration)) => {
             Some(duration.saturating_sub(Duration::from_millis(25)))

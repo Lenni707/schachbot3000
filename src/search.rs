@@ -1,6 +1,6 @@
 use std::{sync::mpsc::Receiver, time::{Duration, Instant}};
 
-use shakmaty::{Chess, Color::{self, Black, White}, Move, Position};
+use shakmaty::{Chess, Color::{self, Black, White}, Move, Position, zobrist::Zobrist64};
 use shakmaty_uci::{UciMessage, UciTimeControl};
 
 use crate::{eval::evaluate, psqt::piece_value};
@@ -89,6 +89,7 @@ pub fn get_best_move(
     time_control: Option<UciTimeControl>,
     playing_color: &Color,
     rx: &Receiver<UciMessage>,
+    played_positions: &Vec<Zobrist64>
 ) -> (Option<Move>, Option<Move>) {
     let possible_moves = board.legal_moves();
         if possible_moves.is_empty() {
@@ -111,7 +112,7 @@ pub fn get_best_move(
     let mut result = (Some(possible_moves[0]), None); // fallback if smt doesnt just pick erstbester (was ist das englische wort) move
 
     for d in 1..=depth { // iterative deepening
-        let this_iteration = search_moves(board, d, &mut search_manager);
+        let this_iteration = search_moves(board, d, &mut search_manager, played_positions);
         if search_manager.stopped { break; }
         result = this_iteration;
     }
@@ -119,7 +120,7 @@ pub fn get_best_move(
     result
 }
 
-pub fn search_moves(board: &Chess, depth: u32, search_manager: &mut SearchManager) -> (Option<Move>, Option<Move>) {
+pub fn search_moves(board: &Chess, depth: u32, search_manager: &mut SearchManager, played_positions: &Vec<Zobrist64>) -> (Option<Move>, Option<Move>) {
     let mut best_move: Option<Move> = None;
     let mut opponent_best_answer: Option<Move> = None;
     let mut best_score: i32 = -i32::MAX;
@@ -134,7 +135,7 @@ pub fn search_moves(board: &Chess, depth: u32, search_manager: &mut SearchManage
         let mut cloned_pos = board.clone();
         cloned_pos.play_unchecked(m); // now opponents turn
 
-        let alpha_beta_result = alpha_beta(&cloned_pos, -i32::MAX, -best_score, depth - 1, search_manager);
+        let alpha_beta_result = alpha_beta(&cloned_pos, -i32::MAX, -best_score, depth - 1, search_manager, played_positions);
         let score = -alpha_beta_result.score; // score is returned from opponents perspective (positive for them = negative for me)
 
         if score > best_score {
@@ -151,7 +152,7 @@ pub fn search_moves(board: &Chess, depth: u32, search_manager: &mut SearchManage
 // the player whos turn it is will get and the best score the player whos turn it inst it will allow
 //
 
-pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_manager: &mut SearchManager) -> ChessMove {
+pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_manager: &mut SearchManager, played_positions: &Vec<Zobrist64>) -> ChessMove {
     if search_manager.should_stop() {
         return ChessMove::new(0, None);   // value is garbage bc it stopped midway. caller thros it away
     }
@@ -166,6 +167,13 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
     }
 
     if board.halfmoves() >= 100 { // 50 move rule
+        return ChessMove::new(0, None);
+    }
+
+    // threepoint repetition
+    let pos_hashed: Zobrist64 = board.zobrist_hash(shakmaty::EnPassantMode::Legal);
+    let position_appearing_count = played_positions.iter().filter(|&&x| x == pos_hashed).count();
+    if position_appearing_count >= 3 {
         return ChessMove::new(0, None);
     }
 
@@ -195,7 +203,7 @@ pub fn alpha_beta(board: &Chess, mut alpha: i32, beta: i32, depth: u32, search_m
         cloned_pos.play_unchecked(m);
         // aplha = the lower bound the maximizing player is guaranteed to get
         // beta = the upper bound on the score the minimizing player is to allow
-        let score = -alpha_beta(&cloned_pos, -beta, -alpha, depth.saturating_sub(1), search_manager).score; // opponents turn =>
+        let score = -alpha_beta(&cloned_pos, -beta, -alpha, depth.saturating_sub(1), search_manager, played_positions).score; // opponents turn =>
         if score >= beta {
             return ChessMove::new(beta, Some(m));
 

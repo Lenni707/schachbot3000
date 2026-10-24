@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::{thread};
 use std::sync::mpsc;
+use shakmaty::zobrist::Zobrist64;
 use shakmaty::{CastlingMode, Chess, Move, Position};
 use shakmaty_uci::{UciMessage, UciMove, UciTimeControl};
 
@@ -33,6 +34,8 @@ fn main() -> io::Result<()> {
 
     let mut prev_time_control: Option<UciTimeControl> = None;
 
+    let mut played_positions: Vec<Zobrist64> = vec![];
+
     for received_msg in &rx {
         match received_msg {
             UciMessage::Uci => {
@@ -62,11 +65,13 @@ fn main() -> io::Result<()> {
                 }
             }
             UciMessage::Go { time_control, .. } => { // TODO ADD TIME BASED DECISSIONS
+                played_positions.push(current_pos.zobrist_hash(shakmaty::EnPassantMode::Legal));
+
                 let pondering = matches!(time_control, Some(UciTimeControl::Ponder));
                 let tc = if !pondering { time_control } else { prev_time_control };
                 prev_time_control = tc.clone();
 
-                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, tc, &current_pos.turn(), &rx);
+                let best_shakmaty_move = get_best_move(&current_pos, DEPTH, tc, &current_pos.turn(), &rx, &played_positions);
 
                 let response = convert_move(best_shakmaty_move);
 
